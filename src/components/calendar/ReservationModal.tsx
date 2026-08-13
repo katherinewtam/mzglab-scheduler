@@ -31,6 +31,7 @@ export default function ReservationModal({
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [reservationType, setReservationType] = useState('STANDARD');
+  const [userName, setUserName] = useState('');
   const [description, setDescription] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
@@ -38,9 +39,7 @@ export default function ReservationModal({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const isEdit = !!selectedReservation;
-  const canEdit = selectedReservation && (
-    selectedReservation.userId === session?.user.id || session?.user.role === 'ADMIN'
-  );
+  const canEdit = true; // Everyone can edit all reservations
 
   useEffect(() => {
     if (selectedSlot) {
@@ -48,6 +47,7 @@ export default function ReservationModal({
       setStartTime(format(selectedSlot.startTime, 'HH:mm'));
       setEndTime(format(selectedSlot.endTime, 'HH:mm'));
       setReservationType('STANDARD');
+      setUserName('');
       setDescription('');
       setNotes('');
     } else if (selectedReservation) {
@@ -57,6 +57,7 @@ export default function ReservationModal({
       setStartTime(format(startDate, 'HH:mm'));
       setEndTime(format(endDate, 'HH:mm'));
       setReservationType(selectedReservation.reservationType);
+      setUserName(selectedReservation.user?.name || '');
       setDescription(selectedReservation.description || '');
       setNotes(selectedReservation.notes || '');
     }
@@ -81,6 +82,7 @@ export default function ReservationModal({
         startTime: startDateTime.toISOString(),
         endTime: endDateTime.toISOString(),
         reservationType,
+        userName: userName || undefined,
         description: description || undefined,
         notes: notes || undefined,
       };
@@ -192,11 +194,14 @@ export default function ReservationModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">Name</label>
+                <label className="block text-sm font-medium mb-1">Your Name *</label>
                 <input
                   type="text"
-                  value={session?.user.name || ''}
-                  className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-50"
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  placeholder="Enter your name"
+                  className="w-full border border-gray-300 rounded px-3 py-2"
+                  required
                   disabled
                 />
               </div>

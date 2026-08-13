@@ -8,6 +8,7 @@ const updateReservationSchema = z.object({
   startTime: z.string().optional(),
   endTime: z.string().optional(),
   reservationType: z.enum(['STANDARD', 'LONG_TERM', 'MAINTENANCE', 'TRAINING', 'CALIBRATION', 'OTHER']).optional(),
+  userName: z.string().optional(),
   description: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -47,27 +48,25 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const reservation = await prisma.reservation.findUnique({
       where: { id: params.id },
-      include: { resource: true },
+      include: { resource: true, user: true },
     });
 
     if (!reservation) {
       return NextResponse.json({ error: 'Reservation not found' }, { status: 404 });
     }
 
-    // Check if user owns the reservation or is an admin
-    if (reservation.userId !== session.user.id && session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
     const body = await req.json();
     const data = updateReservationSchema.parse(body);
+
+    // Update user name if provided
+    if (data.userName && data.userName !== reservation.user.name) {
+      await prisma.user.update({
+        where: { id: reservation.userId },
+        data: { name: data.userName },
+      });
+    }
 
     const startTime = data.startTime ? new Date(data.startTime) : reservation.startTime;
     const endTime = data.endTime ? new Date(data.endTime) : reservation.endTime;
@@ -112,7 +111,7 @@ export async function PATCH(
 
       await tx.auditLog.create({
         data: {
-          userId: session.user.id,
+          userId: reservation.userId,
           reservationId: params.id,
           action: 'RESERVATION_UPDATED',
           details: `Updated reservation for ${reservation.resource.name}`,
@@ -147,11 +146,6 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const reservation = await prisma.reservation.findUnique({
       where: { id: params.id },
       include: { resource: true },
@@ -161,15 +155,10 @@ export async function DELETE(
       return NextResponse.json({ error: 'Reservation not found' }, { status: 404 });
     }
 
-    // Check if user owns the reservation or is an admin
-    if (reservation.userId !== session.user.id && session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
     await prisma.$transaction(async (tx) => {
       await tx.auditLog.create({
         data: {
-          userId: session.user.id,
+          userId: reservation.userId,
           reservationId: params.id,
           action: 'RESERVATION_DELETED',
           details: `Deleted reservation for ${reservation.resource.name}`,

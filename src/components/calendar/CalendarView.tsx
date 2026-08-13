@@ -54,16 +54,6 @@ export default function CalendarView({
   };
 
   const handleSlotClick = (date: Date, startTime: Date, endTime: Date) => {
-    if (!session) {
-      alert('Please login to make a reservation');
-      return;
-    }
-
-    if (!isTrainedOrNotRequired) {
-      alert('You must be trained on this instrument before making reservations. Contact the instrument administrator for training.');
-      return;
-    }
-
     setSelectedSlot({ date, startTime, endTime });
     setSelectedReservation(null);
     setModalOpen(true);
@@ -118,7 +108,7 @@ export default function CalendarView({
               onSlotClick={handleSlotClick}
               onReservationClick={handleReservationClick}
               resource={resource}
-              canCreateReservation={session !== null && isTrainedOrNotRequired}
+              canCreateReservation={true}
             />
           )}
         </div>

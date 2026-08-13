@@ -1,5 +1,4 @@
-export { default } from 'next-auth/middleware';
-
+// Authentication disabled - all routes are public
 export const config = {
-  matcher: ['/my-reservations', '/admin/:path*'],
+  matcher: [],
 };

@@ -9,17 +9,13 @@ const createReservationSchema = z.object({
   startTime: z.string(),
   endTime: z.string(),
   reservationType: z.enum(['STANDARD', 'LONG_TERM', 'MAINTENANCE', 'TRAINING', 'CALIBRATION', 'OTHER']).optional(),
+  userName: z.string().optional(),
   description: z.string().optional(),
   notes: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const body = await req.json();
     const data = createReservationSchema.parse(body);
 
@@ -30,7 +26,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'End time must be after start time' }, { status: 400 });
     }
 
-    // Check if resource requires training
     const resource = await prisma.resource.findUnique({
       where: { id: data.resourceId },
     });
@@ -39,27 +34,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Resource not found' }, { status: 404 });
     }
 
-    if (resource.requiresTraining && session.user.role !== 'ADMIN') {
-      const trainingPermission = await prisma.trainingPermission.findUnique({
-        where: {
-          userId_resourceId: {
-            userId: session.user.id,
-            resourceId: data.resourceId,
-          },
+    // Find or create user by name
+    let user;
+    if (data.userName) {
+      user = await prisma.user.upsert({
+        where: { email: `${data.userName.toLowerCase().replace(/\s+/g, '')}@temp.local` },
+        update: { name: data.userName },
+        create: {
+          id: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          name: data.userName,
+          email: `${data.userName.toLowerCase().replace(/\s+/g, '')}@temp.local`,
+          passwordHash: '',
+          role: 'USER',
         },
       });
-
-      if (!trainingPermission?.trained) {
-        return NextResponse.json(
-          { error: 'You must be trained on this instrument before making reservations. Contact the instrument administrator for training.' },
-          { status: 403 }
-        );
+    } else {
+      // Use shared mzglab account if no name provided
+      user = await prisma.user.findUnique({
+        where: { email: 'mzglab@caltech.edu' },
+      });
+      if (!user) {
+        return NextResponse.json({ error: 'User name required' }, { status: 400 });
       }
     }
 
     // Check for conflicts using a transaction
     const result = await prisma.$transaction(async (tx) => {
-      // Lock the reservation table for this resource and time range
       const conflicts = await tx.reservation.findMany({
         where: {
           resourceId: data.resourceId,
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
       // Create the reservation
       const reservation = await tx.reservation.create({
         data: {
-          userId: session.user.id,
+          userId: user.id,
           resourceId: data.resourceId,
           startTime,
           endTime,
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
       // Create audit log
       await tx.auditLog.create({
         data: {
-          userId: session.user.id,
+          userId: user.id,
           reservationId: reservation.id,
           action: 'RESERVATION_CREATED',
           details: `Created reservation for ${resource.name}`,
