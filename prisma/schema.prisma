@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String               @id @default(cuid())
+  name                String
+  email               String               @unique
+  passwordHash        String
+  role                Role                 @default(USER)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  reservations        Reservation[]
+  trainingPermissions TrainingPermission[]
+  auditLogs           AuditLog[]
+}
+
+model Resource {
+  id                      String               @id @default(cuid())
+  name                    String
+  slug                    String               @unique
+  description             String
+  instructions            String?
+  requiresTraining        Boolean              @default(false)
+  active                  Boolean              @default(true)
+  minimumBookingMinutes   Int                  @default(30)
+  maximumBookingMinutes   Int                  @default(1440)
+  bookingIncrementMinutes Int                  @default(15)
+  maximumAdvanceDays      Int                  @default(30)
+  allowOvernight          Boolean              @default(true)
+  color                   String               @default("#3b82f6")
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+  reservations            Reservation[]
+  trainingPermissions     TrainingPermission[]
+}
+
+model Reservation {
+  id              String          @id @default(cuid())
+  userId          String
+  resourceId      String
+  startTime       DateTime
+  endTime         DateTime
+  reservationType ReservationType @default(STANDARD)
+  description     String?
+  notes           String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resource        Resource        @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  auditLogs       AuditLog[]
+
+  @@index([resourceId, startTime, endTime])
+  @@index([userId])
+}
+
+model TrainingPermission {
+  id         String   @id @default(cuid())
+  userId     String
+  resourceId String
+  trained    Boolean  @default(false)
+  trainedAt  DateTime?
+  approvedBy String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, resourceId])
+  @@index([resourceId])
+}
+
+model AuditLog {
+  id            String       @id @default(cuid())
+  userId        String
+  reservationId String?
+  action        AuditAction
+  details       String?
+  before        String?
+  after         String?
+  createdAt     DateTime     @default(now())
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reservation   Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+
+  @@index([reservationId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum ReservationType {
+  STANDARD
+  LONG_TERM
+  MAINTENANCE
+  TRAINING
+  CALIBRATION
+  OTHER
+}
+
+enum AuditAction {
+  RESERVATION_CREATED
+  RESERVATION_UPDATED
+  RESERVATION_DELETED
+  TRAINING_GRANTED
+  TRAINING_REVOKED
+  RESOURCE_CREATED
+  RESOURCE_UPDATED
+}
