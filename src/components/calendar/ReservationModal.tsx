@@ -202,7 +202,6 @@ export default function ReservationModal({
                   placeholder="Enter your name"
                   className="w-full border border-gray-300 rounded px-3 py-2"
                   required
-                  disabled
                 />
               </div>
 
